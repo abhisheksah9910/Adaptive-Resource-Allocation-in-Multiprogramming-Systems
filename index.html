@@ -4,108 +4,148 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OS Kernel Simulator | Pro Edition</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="style.css">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
 <header>
-    <h1>⚙️ Adaptive OS Kernel Simulator <span class="badge">v2.0</span></h1>
-    <div class="header-stats">
-        <span>Sys Time: <strong id="sys-time">0</strong> ticks</span>
-        <span>Algorithm: <strong>MLFQ + Virtual Memory</strong></span>
+  <h1>⚙️ Adaptive OS Kernel Simulator <span class="badge">v3.0</span></h1>
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    <div class="header-stats" style="display:flex;gap:18px;font-size:.9rem;">
+      <span>Sys Time: <strong id="sys-time">0</strong> ticks</span>
+      <span>Algorithm: <strong>MLFQ + Adaptive Allocator</strong></span>
     </div>
+    <div class="bottleneck-pill normal" id="bottleneck-pill">
+      <div class="blink-dot"></div>
+      <span id="bottleneck-text">SYSTEM NORMAL</span>
+    </div>
+  </div>
 </header>
 
 <div class="layout-grid">
-    <aside class="control-panel">
-        <h3>Deploy Process</h3>
-        <div class="input-group">
-            <label>Process ID</label>
-            <input id="pid" placeholder="e.g., SYS_01">
-        </div>
-        <div class="input-group">
-            <label>CPU Burst</label>
-            <input id="burst" type="number" placeholder="Ticks (e.g., 8)">
-        </div>
-        <div class="input-group">
-            <label>Memory Requirement</label>
-            <input id="memory" type="number" placeholder="MB (e.g., 128)">
-        </div>
-        <button class="btn-primary" onclick="addProcess()">Inject Process</button>
-        
-        <hr>
-        <button class="btn-success" onclick="runSimulation()">Initialize Boot Sequence</button>
-        
-        <div class="hardware-status">
-            <h3>Hardware Telemetry</h3>
-            <p>CPU Core 0: <span id="cpu-status" class="status-indicator idle">IDLE</span></p>
-            <p>RAM (1024MB): <span id="ram-usage">0</span>MB Used</p>
-            <p>Disk Swap: <span id="swap-usage">0</span> In Queue</p>
-        </div>
+  <aside class="control-panel">
+    <h3>Deploy Process</h3>
+    <div class="input-group">
+      <label>Process ID</label>
+      <input id="pid" placeholder="e.g., SYS_01">
+    </div>
+    <div class="input-group">
+      <label>CPU Burst (ticks)</label>
+      <input id="burst" type="number" placeholder="e.g., 8" min="1">
+    </div>
+    <div class="input-group">
+      <label>Memory Requirement (MB)</label>
+      <input id="memory" type="number" placeholder="e.g., 128" min="64">
+    </div>
+    <button class="btn-primary" onclick="addProcess()">Inject Process</button>
 
-        <hr>
-        <div class="hardware-status">
-            <h3>🛡️ Auto Protection</h3>
-            <div class="terminal-bg" style="padding: 12px; border-radius: 6px; font-family: 'Consolas', monospace; font-size: 0.8rem; border: 1px solid #334155;">
-                <span style="color: #f8fafc;">Auto Protection:</span> <span id="ap-status" style="color: #94a3b8; font-weight: bold;">STANDBY</span><br>
-                <div style="height: 5px;"></div>
-                <span id="ap-action1" style="color: #94a3b8;">System idle.</span><br>
-                <span id="ap-action2" style="color: #94a3b8;">Monitoring load...</span>
-            </div>
-        </div>
-    </aside>
+    <hr>
+    <button class="btn-success"  onclick="runSimulation()">▶ Initialize Boot Sequence</button>
+    <button class="btn-warning"  onclick="loadDemoProcesses()">⚡ Load Demo Processes</button>
+    <button class="btn-danger"   onclick="resetSimulation()">↺ Reset Simulation</button>
 
-    <main class="dashboard">
-        <div class="panel-grid">
-            <div class="panel">
-                <h3>Multi-Level Feedback Queues (MLFQ)</h3>
-                <div class="queue-container">
-                    <div class="queue-label">Q1 (RR, q=2) <span class="arrow">→</span></div>
-                    <div id="q1-visual" class="queue-track"></div>
-                </div>
-                <div class="queue-container">
-                    <div class="queue-label">Q2 (RR, q=4) <span class="arrow">→</span></div>
-                    <div id="q2-visual" class="queue-track"></div>
-                </div>
-                <div class="queue-container">
-                    <div class="queue-label">Q3 (FCFS) &nbsp;&nbsp;<span class="arrow">→</span></div>
-                    <div id="q3-visual" class="queue-track"></div>
-                </div>
-            </div>
+    <hr>
+    <div class="hardware-status">
+      <h3>Hardware Telemetry</h3>
+      <p>CPU Core 0: <span id="cpu-status" class="status-indicator idle">IDLE</span></p>
+      <p>RAM (1024 MB): <span id="ram-usage">0</span> MB Used</p>
+      <p>Disk Swap Queue: <span id="swap-usage">0</span></p>
+      <div class="mini-gauge-wrap">
+        <div class="mini-gauge-label">
+          <span>CPU Utilization</span>
+          <span id="cpu-pct-label">0%</span>
+        </div>
+        <div class="mini-gauge-track">
+          <div class="mini-gauge-fill" id="cpu-pct-bar" style="width:0%;background:var(--accent-green)"></div>
+        </div>
+      </div>
+    </div>
 
-            <div class="panel">
-                <h3>Physical Memory (RAM) Allocation</h3>
-                <p class="sub-text">First-Fit Contiguous Allocation (64MB Blocks)</p>
-                <div id="memory-map-container" class="memory-map-container"></div>
-            </div>
-        </div>
+    <hr>
+    <div class="hardware-status">
+      <h3>🛡️ Auto Protection</h3>
+      <div class="ap-terminal">
+        <span style="color:#f8fafc">Auto Protection:</span>
+        <span id="ap-status" style="color:#94a3b8;font-weight:bold;"> STANDBY</span><br>
+        <div style="height:4px"></div>
+        <span id="ap-action1" style="color:#94a3b8">System idle.</span><br>
+        <span id="ap-action2" style="color:#94a3b8">Monitoring load...</span>
+      </div>
+    </div>
 
-        <div class="panel-grid half">
-            <div class="panel">
-                <h3>Resource Utilization</h3>
-                <div class="chart-wrapper">
-                    <canvas id="chart"></canvas>
-                </div>
-            </div>
-            <div class="panel terminal-bg">
-                <h3>Kernel Logs</h3>
-                <div id="logs" class="terminal-logs"></div>
-            </div>
-        </div>
+    <hr>
+    <div class="hardware-status">
+      <h3>📋 Policy Engine</h3>
+      <p style="font-size:.78rem;color:var(--text-muted)">CPU Critical: <strong style="color:var(--accent-red)">≥80% burst used</strong></p>
+      <p style="font-size:.78rem;color:var(--text-muted)">Starvation:   <strong style="color:var(--accent-yellow)">wait > 10 ticks</strong></p>
+      <p style="font-size:.78rem;color:var(--text-muted)">RAM Pressure: <strong style="color:var(--accent-purple)">≥768 MB used</strong></p>
+      <p style="font-size:.78rem;color:var(--text-muted)">Realloc every:<strong style="color:var(--accent-blue)"> 5 ticks</strong></p>
+    </div>
+  </aside>
 
-        <div class="panel">
-            <h3>Process Control Block (PCB) Table</h3>
-            <table id="ptable" class="pro-table">
-                <tr><th>PID</th><th>Rem. Burst</th><th>RAM (MB)</th><th>Queue</th><th>Status</th><th>Action</th></tr>
-            </table>
+  <main class="dashboard">
+
+    <div class="panel-grid" style="margin-bottom:20px">
+      <div class="panel">
+        <h3>Multi-Level Feedback Queues (MLFQ)</h3>
+        <div class="queue-container">
+          <div class="queue-label">Q1 (RR, q=2) →</div>
+          <div id="q1-visual" class="queue-track"></div>
         </div>
-        
-        <div class="panel">
-            <h3>CPU Execution Timeline</h3>
-            <div id="gantt"></div>
+        <div class="queue-container">
+          <div class="queue-label">Q2 (RR, q=4) →</div>
+          <div id="q2-visual" class="queue-track"></div>
         </div>
-    </main>
+        <div class="queue-container">
+          <div class="queue-label">Q3 (FCFS) &nbsp;&nbsp;→</div>
+          <div id="q3-visual" class="queue-track"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Physical Memory (RAM) Allocation</h3>
+        <p class="sub-text">First-Fit Contiguous Allocation (64 MB Blocks)</p>
+        <div id="memory-map-container" class="memory-map-container"></div>
+      </div>
+    </div>
+
+    <div class="panel-grid tri" style="margin-bottom:20px">
+      <div class="panel">
+        <h3>RAM Utilization</h3>
+        <div class="chart-wrapper"><canvas id="chart"></canvas></div>
+      </div>
+      <div class="panel">
+        <h3>🚨 Policy Alerts</h3>
+        <div class="alert-panel" id="alert-panel">
+          <div class="no-alerts">No active alerts</div>
+        </div>
+      </div>
+      <div class="panel terminal-bg">
+        <h3 style="color:#f8fafc">Kernel Logs</h3>
+        <div id="logs" class="terminal-logs"></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:20px;overflow-x:auto">
+      <h3>Process Control Block (PCB) Table</h3>
+      <table id="ptable" class="pro-table">
+        <tr>
+          <th>PID</th><th>Rem. Burst</th><th>RAM (MB)</th>
+          <th>Queue</th><th>Wait</th>
+          <th>CPU Util.</th>
+          <th>Priority Score</th>
+          <th>Status</th><th>Action</th>
+        </tr>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>CPU Execution Timeline (Gantt)</h3>
+      <div id="gantt"></div>
+    </div>
+
+  </main>
 </div>
 
 <script src="script.js"></script>
